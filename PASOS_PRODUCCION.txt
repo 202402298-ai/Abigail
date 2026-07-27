@@ -1,0 +1,139 @@
+SEGUIMIENTO ITSM — PASOS PARA LEVANTAR EL SERVIDOR EN PRODUCCION
+==================================================================
+
+(Guia de referencia detallada con explicaciones: DEPLOY.md, en esta misma carpeta.
+ Este archivo es el checklist rapido, paso a paso, en orden.)
+
+
+PASO 1 — Instalar PostgreSQL en el servidor
+--------------------------------------------
+1.1. Descargar e instalar desde: https://www.postgresql.org/download/windows/
+1.2. Durante la instalacion, definir una password para el usuario "postgres" y guardarla.
+1.3. Abrir psql o pgAdmin y ejecutar:
+
+     CREATE DATABASE seguimiento_itsm;
+     CREATE USER seguimiento_itsm WITH PASSWORD 'una-password-fuerte-aqui';
+     GRANT ALL PRIVILEGES ON DATABASE seguimiento_itsm TO seguimiento_itsm;
+     ALTER DATABASE seguimiento_itsm OWNER TO seguimiento_itsm;
+
+
+PASO 2 — Copiar el proyecto al servidor
+-----------------------------------------
+2.1. Copiar toda la carpeta del proyecto a, por ejemplo: C:\apps\seguimiento-itsm
+     (o clonarla con git si ya esta en un repositorio)
+
+
+PASO 3 — Crear entorno virtual e instalar dependencias
+----------------------------------------------------------
+    cd C:\apps\seguimiento-itsm
+    python -m venv venv
+    .\venv\Scripts\Activate.ps1
+    pip install -r requirements.txt
+
+
+PASO 4 — Configurar el archivo .env
+---------------------------------------
+4.1. Copiar la plantilla:
+     copy .env.example .env
+
+4.2. Editar .env y llenar con valores reales:
+
+     DJANGO_SECRET_KEY=
+         Generar una nueva (NO reusar la de desarrollo) con:
+         python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+
+     DJANGO_DEBUG=False
+
+     DJANGO_ALLOWED_HOSTS=
+         El dominio o IP real por donde se va a acceder al sitio
+
+     DATABASE_URL=postgres://seguimiento_itsm:la-password-del-paso-1@localhost:5432/seguimiento_itsm
+
+     DJANGO_SECURE_SSL_REDIRECT=False
+         (dejarlo en False por ahora; se cambia a True en el Paso 8, cuando ya haya HTTPS)
+
+
+PASO 5 — Migrar los datos reales (no partir de una base vacia)
+--------------------------------------------------------------------
+Esto conserva las notas de seguimiento manuales y el historial de importaciones.
+
+5.1. EN DESARROLLO (con SQLite, tu maquina actual), generar el respaldo:
+
+     $env:PYTHONUTF8 = "1"
+     python manage.py dumpdata --natural-foreign --natural-primary `
+       --exclude contenttypes --exclude auth.permission --exclude admin.logentry --exclude sessions.session `
+       --output datadump.json
+
+     (el $env:PYTHONUTF8 = "1" es obligatorio: sin eso el comando falla por
+     los acentos/enye de los datos reales)
+
+5.2. Copiar datadump.json al servidor de produccion.
+
+5.3. EN EL SERVIDOR, con el .env ya apuntando a Postgres:
+
+     python manage.py migrate
+     $env:PYTHONUTF8 = "1"
+     python manage.py loaddata datadump.json
+
+     Alternativa si prefieres empezar limpio (se pierden las notas manuales):
+     solo "python manage.py migrate" y luego volver a subir el ultimo XML
+     desde el modulo "Subir XML" del sitio.
+
+
+PASO 6 — Preparar archivos estaticos y probar que arranca
+---------------------------------------------------------------
+    python manage.py collectstatic --noinput
+    python manage.py createsuperuser      (solo si NO migraste los usuarios en el Paso 5)
+    waitress-serve --host=0.0.0.0 --port=8000 seguimiento_itsm.wsgi:application
+
+Entrar desde el navegador a: http://<ip-del-servidor>:8000/
+Confirmar que carga el login, el dashboard, tickets y subir XML.
+Una vez confirmado, cerrar este proceso (Ctrl+C) y seguir al Paso 7.
+
+
+PASO 7 — Instalar como servicio de Windows (con NSSM)
+------------------------------------------------------------
+Para que la app arranque sola con el servidor y siga corriendo en segundo plano.
+
+7.1. Descargar NSSM: https://nssm.cc/download
+7.2. Instalar el servicio:
+
+     nssm install SeguimientoITSM "C:\apps\seguimiento-itsm\venv\Scripts\waitress-serve.exe" "--host=0.0.0.0 --port=8000 seguimiento_itsm.wsgi:application"
+     nssm set SeguimientoITSM AppDirectory "C:\apps\seguimiento-itsm"
+     nssm start SeguimientoITSM
+
+
+PASO 8 — Configurar HTTPS
+------------------------------
+Waitress no maneja HTTPS por si solo; necesita algo delante.
+
+Opcion A — Caddy (mas simple, certificado automatico):
+     Crear un Caddyfile con:
+
+     seguimiento-itsm.tudominio.com {
+         reverse_proxy localhost:8000
+     }
+
+Opcion B — IIS (si el servidor ya lo usa):
+     Configurar como reverse proxy hacia localhost:8000 con el modulo
+     Application Request Routing (ARR) + URL Rewrite, e instalar el
+     certificado en el sitio de IIS.
+
+8.1. Una vez que HTTPS funcione, editar .env:
+     DJANGO_SECURE_SSL_REDIRECT=True
+
+8.2. Reiniciar el servicio:
+     nssm restart SeguimientoITSM
+
+
+LISTO — El sitio deberia estar accesible por HTTPS y corriendo como servicio.
+
+
+PARA ACTUALIZAR EN EL FUTURO (despues de cambios de codigo)
+-------------------------------------------------------------------
+    git pull                                    (o copiar los archivos nuevos)
+    .\venv\Scripts\Activate.ps1
+    pip install -r requirements.txt
+    python manage.py migrate
+    python manage.py collectstatic --noinput
+    nssm restart SeguimientoITSM

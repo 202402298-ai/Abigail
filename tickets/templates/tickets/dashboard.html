@@ -1,0 +1,313 @@
+{% extends "tickets/base.html" %}
+{% load ticket_extras %}
+{% block title %}Dashboard — Seguimiento ITSM{% endblock %}
+
+{% block content %}
+
+{% if favoritas %}
+  <div class="mb-3">
+    <span class="text-muted small me-2"><i class="bi bi-star-fill"></i> Mis áreas:</span>
+    <a href="{% url 'tickets:dashboard' %}" class="btn btn-sm {% if not area_filtro %}btn-primary{% else %}btn-outline-primary{% endif %} me-1 mb-1">
+      Todas
+    </a>
+    {% for area in favoritas %}
+      <a href="?area={{ area.team_code }}" class="btn btn-sm {% if area_filtro == area.team_code %}btn-primary{% else %}btn-outline-primary{% endif %} me-1 mb-1">
+        {{ area.display_name }}
+      </a>
+    {% endfor %}
+    <a href="{% url 'tickets:mis_areas' %}" class="btn btn-sm btn-link text-muted mb-1"><i class="bi bi-gear"></i> configurar</a>
+  </div>
+{% endif %}
+
+{% if areas_gestionadas %}
+  <div class="alert alert-primary d-flex align-items-center">
+    <i class="bi bi-eye-fill me-2"></i>
+    Estás viendo únicamente los tickets de:
+    <strong class="ms-1">
+      {% for area in areas_gestionadas %}{{ area.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    </strong>
+  </div>
+{% endif %}
+
+{% if ultima_importacion %}
+  <p class="text-muted small mb-3">
+    <i class="bi bi-info-circle me-1"></i>Mostrando el estado actual de todos los tickets en el sistema.
+    Última importación: <strong>{{ ultima_importacion.file_name }}</strong> el {{ ultima_importacion.imported_at|date:"Y-m-d H:i" }}
+    ({{ ultima_importacion.new_count }} nuevos, {{ ultima_importacion.updated_count }} actualizados,
+    {{ ultima_importacion.unchanged_count }} sin cambios).
+  </p>
+{% endif %}
+
+{% if sin_datos %}
+  <div class="alert alert-info">
+    Todavía no hay ninguna importación. <a href="{% url 'tickets:upload' %}">Sube tu primer archivo XML</a> para ver el dashboard.
+  </div>
+{% else %}
+
+<div class="row g-3 mb-4">
+  {% if not area_activa %}
+  <div class="col-sm-6">
+    <div class="card text-bg-primary h-100">
+      <div class="card-body">
+        <div class="fs-2 fw-bold">{{ kpis.total_tickets }}</div>
+        <div>Total de tickets (histórico)</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="col-sm-6 {% if area_activa %}col-12{% endif %}">
+    <div class="card text-bg-warning h-100">
+      <div class="card-body">
+        <div class="fs-2 fw-bold">{{ kpis.total_activos }}</div>
+        <div>
+          Tickets activos
+          {% if area_filtro %}<br><small>filtrado a {{ area_names|get_item:area_filtro|default:area_filtro }}</small>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  {% if not area_activa %}
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Tickets activos por país / unidad de negocio
+        <small class="text-muted d-block">Soporte local — quien resuelve el ticket</small>
+      </div>
+      <div class="card-body"><canvas id="chartAreaPais"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Tickets activos por área funcional / corporativa
+        <small class="text-muted d-block">ITSM coordina y valida (no resuelve); DSL, Infraestructura, ITN y Transf. Digital son equipos especializados</small>
+      </div>
+      <div class="card-body"><canvas id="chartAreaFuncional"></canvas></div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Técnicos que más resuelven en {{ area_names|get_item:area_activa|default:area_activa }}
+        <small class="text-muted d-block">Según quién movió el ticket a Pre-Cierre / lo devolvió a ITSM por última vez</small>
+      </div>
+      <div class="card-body"><canvas id="chartResolutores"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Tiempo promedio de resolución por técnico
+        <small class="text-muted d-block">Tiempo que tuvieron el ticket asignado, no el ciclo de vida completo</small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Técnico</th><th>Resueltos</th><th>Tiempo prom.</th></tr></thead>
+            <tbody>
+              {% for row in ranking_resolutores %}
+              <tr>
+                <td>{{ row.nombre }}</td>
+                <td>{{ row.total }}</td>
+                <td>{{ row.avg_duracion|duracion }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-muted">Sin tickets resueltos atribuibles a un técnico en esta área todavía.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Tickets por estado</div>
+      <div class="card-body"><canvas id="chartEstado"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Tiempo abierto (tickets activos)</div>
+      <div class="card-body"><canvas id="chartTiempoAbierto"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Distribución por prioridad</div>
+      <div class="card-body"><canvas id="chartPrioridad"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Nivel 2: por tipo y área/región</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Tipo</th><th>Área / región</th><th>Tickets</th></tr></thead>
+            <tbody>
+              {% for row in tipo_area %}
+              <tr>
+                <td>{{ row.request_type|default:"—" }}</td>
+                <td>{{ row.area_categoria|default:"—" }}</td>
+                <td>{{ row.total }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-muted">Sin tickets en Nivel 2.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Tiempos de servicio promedio
+        <small class="text-muted d-block">Global: primera respuesta {{ tiempos_global.avg_respuesta|duracion }} · resolución {{ tiempos_global.avg_resolucion|duracion }}</small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Prioridad</th><th>Resolución prom.</th><th>Tickets</th></tr></thead>
+            <tbody>
+              {% for row in tiempos_por_prioridad %}
+              <tr>
+                <td>{{ row.priority|default:"—" }}</td>
+                <td>{{ row.avg_resolucion|duracion }}</td>
+                <td>{{ row.total }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Carga activa por agente (top 15)</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Agente</th><th>Área</th><th>Activos</th></tr></thead>
+            <tbody>
+              {% for row in carga_agentes %}
+              <tr>
+                <td>{{ row.owner_name }}</td>
+                <td>{{ row.display_name }}</td>
+                <td>{{ row.total }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-muted">Sin datos.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">Tickets activos más antiguos (top 15)</div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Ticket</th><th>Asunto</th><th>Área</th><th>Estado</th><th>Días abierto</th></tr></thead>
+        <tbody>
+          {% for item in detalle_tiempo_abierto %}
+          <tr>
+            <td>{{ item.ticket.tracking_id }}</td>
+            <td>{{ item.ticket.subject|truncatechars:50 }}</td>
+            <td>{{ area_names|get_item:item.ticket.team_code|default:item.ticket.team_code }}</td>
+            <td>{{ item.ticket.status }}</td>
+            <td>{{ item.dias_abierto }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-muted">Sin tickets activos.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{{ chart_data|json_script:"chart-data" }}
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if not sin_datos %}
+<script>
+Chart.register(ChartDataLabels);
+
+const chartData = JSON.parse(document.getElementById('chart-data').textContent);
+const palette = ['#4C6EF5', '#F76707', '#2F9E44', '#E03131', '#7048E8', '#0CA678', '#F59F00', '#1971C2', '#C2255C', '#5C940D'];
+
+// Etiqueta "cantidad (porcentaje%)" sobre cada barra/porción, relativo al
+// total de ESE gráfico (no al total general de tickets).
+function pctLabels({ color = '#333', anchor = 'end', align = 'top', size = 11 } = {}) {
+  return {
+    color, anchor, align,
+    font: { weight: 'bold', size },
+    formatter: (value, ctx) => {
+      if (!value) return null;
+      const data = ctx.chart.data.datasets[ctx.datasetIndex].data;
+      const total = data.reduce((a, b) => a + b, 0);
+      const pct = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+      return `${value} (${pct}%)`;
+    },
+  };
+}
+
+{% if not area_activa %}
+new Chart(document.getElementById('chartAreaPais'), {
+  type: 'bar',
+  data: { labels: chartData.por_area_pais.labels, datasets: [{ label: 'Activos', data: chartData.por_area_pais.data, backgroundColor: palette[0] }] },
+  options: { layout: { padding: { top: 20 } }, plugins: { legend: { display: false }, datalabels: pctLabels() } }
+});
+
+new Chart(document.getElementById('chartAreaFuncional'), {
+  type: 'bar',
+  data: { labels: chartData.por_area_funcional.labels, datasets: [{ label: 'Activos', data: chartData.por_area_funcional.data, backgroundColor: palette[1] }] },
+  options: { layout: { padding: { top: 20 } }, plugins: { legend: { display: false }, datalabels: pctLabels() } }
+});
+{% else %}
+new Chart(document.getElementById('chartResolutores'), {
+  type: 'bar',
+  data: { labels: chartData.ranking_resolutores.labels, datasets: [{ label: 'Resueltos', data: chartData.ranking_resolutores.data, backgroundColor: palette[5] }] },
+  options: { indexAxis: 'y', layout: { padding: { right: 40 } }, plugins: { legend: { display: false }, datalabels: pctLabels({ anchor: 'end', align: 'right' }) } }
+});
+{% endif %}
+
+new Chart(document.getElementById('chartEstado'), {
+  type: 'doughnut',
+  data: { labels: chartData.por_estado.labels, datasets: [{ data: chartData.por_estado.data, backgroundColor: palette }] },
+  options: { plugins: { datalabels: pctLabels({ color: '#fff', anchor: 'center', align: 'center', size: 11 }) } }
+});
+
+new Chart(document.getElementById('chartTiempoAbierto'), {
+  type: 'bar',
+  data: { labels: chartData.tiempo_abierto.labels, datasets: [{ label: 'Tickets', data: chartData.tiempo_abierto.data, backgroundColor: palette[3] }] },
+  options: { layout: { padding: { top: 20 } }, plugins: { legend: { display: false }, datalabels: pctLabels() } }
+});
+
+new Chart(document.getElementById('chartPrioridad'), {
+  type: 'pie',
+  data: { labels: chartData.por_prioridad.labels, datasets: [{ data: chartData.por_prioridad.data, backgroundColor: palette }] },
+  options: { plugins: { datalabels: pctLabels({ color: '#fff', anchor: 'center', align: 'center', size: 11 }) } }
+});
+
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,82 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Seguimiento ITSM{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="{% static 'tickets/css/custom.css' %}" rel="stylesheet">
+</head>
+<body>
+  <div class="d-flex" id="app-wrapper">
+    {% if user.is_authenticated %}
+    <nav class="sidebar d-none d-md-flex flex-column text-white p-3">
+      {% include "tickets/_sidebar_nav.html" %}
+      <div class="mt-auto pt-3">
+        <hr class="text-white-50">
+        <div class="d-flex align-items-center justify-content-between">
+          <span class="small text-white-50">
+            <i class="bi bi-person-circle me-1"></i>{{ user.username }}
+            {% if sidebar_areas_gestionadas %}
+              <br><span class="badge text-bg-primary mt-1">
+                <i class="bi bi-eye-fill"></i>
+                {% for area in sidebar_areas_gestionadas %}{{ area.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+              </span>
+            {% endif %}
+          </span>
+          <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button class="btn btn-outline-light btn-sm" type="submit">Salir</button>
+          </form>
+        </div>
+      </div>
+    </nav>
+
+    <div class="topbar-mobile d-flex d-md-none align-items-center bg-dark text-white p-2 w-100 fixed-top">
+      <button class="btn btn-outline-light btn-sm me-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarOffcanvas">
+        <i class="bi bi-list"></i>
+      </button>
+      <span class="fw-bold">Seguimiento ITSM</span>
+    </div>
+    <div class="offcanvas offcanvas-start bg-dark text-white d-md-none" tabindex="-1" id="sidebarOffcanvas">
+      <div class="offcanvas-header">
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+      </div>
+      <div class="offcanvas-body d-flex flex-column">
+        {% include "tickets/_sidebar_nav.html" %}
+        <div class="mt-auto pt-3">
+          <hr class="text-white-50">
+          <div class="d-flex align-items-center justify-content-between">
+            <span class="small text-white-50"><i class="bi bi-person-circle me-1"></i>{{ user.username }}</span>
+            <form method="post" action="{% url 'logout' %}">
+              {% csrf_token %}
+              <button class="btn btn-outline-light btn-sm" type="submit">Salir</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <main class="main-content {% if not user.is_authenticated %}no-sidebar{% endif %} flex-grow-1">
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

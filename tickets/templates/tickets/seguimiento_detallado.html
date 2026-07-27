@@ -1,0 +1,102 @@
+{% extends "tickets/base.html" %}
+{% block title %}Seguimiento detallado — Seguimiento ITSM{% endblock %}
+
+{% block content %}
+
+{% if areas_gestionadas %}
+  <div class="alert alert-primary d-flex align-items-center">
+    <i class="bi bi-eye-fill me-2"></i>
+    Estás viendo únicamente los tickets de:
+    <strong class="ms-1">
+      {% for area in areas_gestionadas %}{{ area.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    </strong>
+  </div>
+{% elif favoritas %}
+  <div class="alert alert-primary d-flex align-items-center">
+    <i class="bi bi-star-fill me-2"></i>
+    Mostrando tus áreas de seguimiento:
+    <strong class="ms-1">
+      {% for area in favoritas %}{{ area.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    </strong>
+    <a href="{% url 'tickets:mis_areas' %}" class="ms-2 small">(cambiar)</a>
+  </div>
+{% else %}
+  <div class="alert alert-warning d-flex align-items-center">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    No tienes áreas de seguimiento configuradas — se muestran todas las áreas.
+    <a href="{% url 'tickets:mis_areas' %}" class="ms-2">Configurar mis áreas</a>
+  </div>
+{% endif %}
+
+<p class="text-muted small mb-3">
+  Tickets activos con más de {{ dias_minimos }} días abiertos, agrupados por área y técnico,
+  del de mayor al de menor tiempo abierto. Total: <strong>{{ total_tickets }}</strong>.
+</p>
+
+{% if not grupos %}
+  <div class="alert alert-success">
+    <i class="bi bi-check-circle-fill me-1"></i>
+    No hay tickets con más de {{ dias_minimos }} días abiertos en tus áreas. ¡Al día!
+  </div>
+{% else %}
+
+<form method="post">
+  {% csrf_token %}
+  <div class="mb-3">
+    <button type="submit" class="btn btn-primary">Guardar seguimiento</button>
+  </div>
+
+  {% for grupo in grupos %}
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span><i class="bi bi-geo-alt-fill me-1"></i>{{ grupo.display_name }}</span>
+      <span class="badge text-bg-secondary">{{ grupo.total }} ticket{{ grupo.total|pluralize }}</span>
+    </div>
+    <div class="card-body">
+      {% for tecnico in grupo.tecnicos %}
+      <h6 class="text-muted mt-2">
+        <i class="bi bi-person-fill me-1"></i>{{ tecnico.nombre }}
+        <span class="text-muted small">({{ tecnico.tickets|length }})</span>
+      </h6>
+      <div class="table-responsive mb-3">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th style="width:90px">Ticket</th>
+              <th>Asunto</th>
+              <th style="width:110px">Tiempo abierto</th>
+              <th style="width:35%">Seguimiento</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in tecnico.tickets %}
+            <tr>
+              <td>
+                {% if t.ticket_url %}<a href="{{ t.ticket_url }}" target="_blank" rel="noopener">{{ t.hesk_row_id|default:t.tracking_id }}</a>
+                {% else %}{{ t.hesk_row_id|default:t.tracking_id }}{% endif %}
+              </td>
+              <td>{{ t.subject|default:"—" }}</td>
+              <td>
+                <span class="badge {% if t.dias_abierto > 7 %}text-bg-danger{% elif t.dias_abierto > 5 %}text-bg-warning{% else %}text-bg-secondary{% endif %}">
+                  {{ t.dias_abierto }} días
+                </span>
+              </td>
+              <td>
+                <textarea name="nota_{{ t.pk }}" class="form-control form-control-sm" rows="2"
+                          placeholder="Escribe aquí el seguimiento...">{{ t.seguimiento_notas }}</textarea>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <button type="submit" class="btn btn-primary mb-4">Guardar seguimiento</button>
+</form>
+
+{% endif %}
+{% endblock %}

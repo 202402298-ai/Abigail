@@ -1,0 +1,58 @@
+{% extends "tickets/base.html" %}
+{% block title %}Subir XML — Seguimiento ITSM{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">Importar exportación de HESK (.xml)</div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          {{ form.xml_file.label_tag }}
+          {{ form.xml_file }}
+          {% if form.xml_file.errors %}
+            <div class="text-danger small mt-1">{{ form.xml_file.errors }}</div>
+          {% endif %}
+          <div class="form-text">{{ form.xml_file.help_text }}</div>
+          <button type="submit" class="btn btn-primary mt-3">Importar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">Importaciones recientes</div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr>
+                <th>Archivo</th><th>Fecha de importación</th><th>En el archivo</th>
+                <th>Nuevos</th><th>Actualizados</th><th>Sin cambios</th>
+                <th>Rango de fechas</th><th>Importado por</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for b in historial %}
+              <tr>
+                <td><a href="{% url 'tickets:ticket_list' %}?last_batch={{ b.pk }}">{{ b.file_name }}</a></td>
+                <td>{{ b.imported_at|date:"Y-m-d H:i" }}</td>
+                <td>{{ b.ticket_count }}</td>
+                <td><span class="badge text-bg-success">{{ b.new_count }}</span></td>
+                <td><span class="badge text-bg-warning">{{ b.updated_count }}</span></td>
+                <td><span class="badge text-bg-secondary">{{ b.unchanged_count }}</span></td>
+                <td>{{ b.date_range_start|date:"Y-m-d" }} — {{ b.date_range_end|date:"Y-m-d" }}</td>
+                <td>{{ b.imported_by|default:"—" }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="8" class="text-muted">Todavía no se ha importado ningún archivo.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

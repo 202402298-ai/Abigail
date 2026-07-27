@@ -1,0 +1,52 @@
+{% load static %}
+<div class="sidebar-brand">
+  <a href="{% url 'tickets:dashboard' %}" class="d-flex align-items-center text-white text-decoration-none">
+    <i class="bi bi-kanban-fill fs-4 me-2"></i>
+    <span class="fs-5 fw-bold">Seguimiento ITSM</span>
+  </a>
+</div>
+<hr class="text-white-50">
+
+<div class="sidebar-section-label">Tickets</div>
+<ul class="nav nav-pills flex-column">
+  <li class="nav-item">
+    <a href="{% url 'tickets:dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+      <i class="bi bi-speedometer2 me-2"></i>Dashboard
+    </a>
+  </li>
+  <li class="nav-item">
+    <a href="{% url 'tickets:ticket_list' %}" class="nav-link {% if request.resolver_match.url_name == 'ticket_list' %}active{% endif %}">
+      <i class="bi bi-list-check me-2"></i>Tickets
+    </a>
+  </li>
+  <li class="nav-item">
+    <a href="{% url 'tickets:seguimiento_detallado' %}" class="nav-link {% if request.resolver_match.url_name == 'seguimiento_detallado' %}active{% endif %}">
+      <i class="bi bi-journal-text me-2"></i>Seguimiento detallado
+    </a>
+  </li>
+  {% if perms.tickets.add_importbatch %}
+  <li class="nav-item">
+    <a href="{% url 'tickets:upload' %}" class="nav-link {% if request.resolver_match.url_name == 'upload' %}active{% endif %}">
+      <i class="bi bi-upload me-2"></i>Subir XML
+    </a>
+  </li>
+  {% endif %}
+  <li class="nav-item">
+    <a href="{% url 'tickets:mis_areas' %}" class="nav-link {% if request.resolver_match.url_name == 'mis_areas' %}active{% endif %}">
+      <i class="bi bi-star me-2"></i>Mis áreas
+    </a>
+  </li>
+</ul>
+
+<!-- Próximos módulos: agregar aquí un nuevo <div class="sidebar-section-label"> y su <ul class="nav nav-pills flex-column"> -->
+
+{% if user.is_staff %}
+<div class="sidebar-section-label mt-3">Administración</div>
+<ul class="nav nav-pills flex-column">
+  <li class="nav-item">
+    <a href="/admin/" class="nav-link">
+      <i class="bi bi-gear-fill me-2"></i>Panel de admin
+    </a>
+  </li>
+</ul>
+{% endif %}

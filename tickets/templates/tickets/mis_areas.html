@@ -1,0 +1,53 @@
+{% extends "tickets/base.html" %}
+{% block title %}Mis áreas — Seguimiento ITSM{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        Mis áreas de seguimiento
+        <small class="text-muted d-block">
+          Elige las áreas/países que quieres seguir de cerca. Te van a aparecer como botones de
+          acceso rápido arriba del dashboard para filtrar sus métricas al instante. Esto no
+          restringe lo que puedes ver — sigues teniendo acceso a todo el sistema; es solo un atajo
+          personal que puedes cambiar cuando quieras.
+        </small>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+
+          <h6 class="text-muted text-uppercase small mt-2">Países / unidades de negocio</h6>
+          <div class="row row-cols-2 row-cols-md-3 g-2 mb-3">
+            {% for area in paises %}
+            <div class="col">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="areas" value="{{ area.team_code }}"
+                       id="area_{{ area.team_code }}" {% if area.team_code in seleccionadas %}checked{% endif %}>
+                <label class="form-check-label" for="area_{{ area.team_code }}">{{ area.display_name }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          <h6 class="text-muted text-uppercase small">Áreas funcionales / corporativas</h6>
+          <div class="row row-cols-2 row-cols-md-3 g-2 mb-4">
+            {% for area in funcionales %}
+            <div class="col">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="areas" value="{{ area.team_code }}"
+                       id="area_{{ area.team_code }}" {% if area.team_code in seleccionadas %}checked{% endif %}>
+                <label class="form-check-label" for="area_{{ area.team_code }}">{{ area.display_name }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+
+          <button type="submit" class="btn btn-primary">Guardar mis áreas</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

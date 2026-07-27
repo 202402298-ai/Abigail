@@ -1,0 +1,21 @@
+# Entorno / secretos
+.env
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+
+# Django
+db.sqlite3
+staticfiles/
+media/
+
+# Editor / SO
+.vscode/
+.idea/
+Thumbs.db
+
+# Configuración local de Claude Code (no compartida)
+.claude/settings.local.json

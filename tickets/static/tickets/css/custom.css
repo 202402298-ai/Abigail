@@ -1,0 +1,72 @@
+body {
+  background-color: #f4f6f9;
+}
+
+.card-header {
+  font-weight: 600;
+}
+
+canvas {
+  max-height: 300px;
+}
+
+/* --- Sidebar de módulos --- */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 250px;
+  background-color: #1c2333;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.sidebar-brand {
+  padding: 0.25rem 0.5rem 0.75rem;
+}
+
+.sidebar-section-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.sidebar .nav-link {
+  color: rgba(255, 255, 255, 0.85);
+  border-radius: 0.375rem;
+}
+
+.sidebar .nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.sidebar .nav-link.active {
+  background-color: #4c6ef5;
+  color: #fff;
+}
+
+.main-content {
+  margin-left: 250px;
+  padding: 1.5rem 1.75rem 3rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.main-content.no-sidebar {
+  margin-left: 0;
+}
+
+@media (max-width: 767.98px) {
+  .main-content {
+    margin-left: 0;
+    padding-top: 4rem;
+  }
+
+  .main-content.no-sidebar {
+    padding-top: 1.5rem;
+  }
+}

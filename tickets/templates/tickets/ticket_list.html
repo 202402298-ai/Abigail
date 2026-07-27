@@ -1,0 +1,113 @@
+{% extends "tickets/base.html" %}
+{% load ticket_extras %}
+{% block title %}Tickets — Seguimiento ITSM{% endblock %}
+
+{% block content %}
+
+{% if areas_gestionadas %}
+  <div class="alert alert-primary d-flex align-items-center">
+    <i class="bi bi-eye-fill me-2"></i>
+    Estás viendo únicamente los tickets de:
+    <strong class="ms-1">
+      {% for area in areas_gestionadas %}{{ area.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    </strong>
+  </div>
+{% endif %}
+
+<form method="get" class="row row-cols-lg-auto g-2 align-items-end mb-4">
+  <div class="col-12">
+    <label class="form-label mb-1">Actualizado en importación</label>
+    <select name="last_batch" class="form-select">
+      <option value="">Cualquiera</option>
+      {% for b in filtros.batches %}
+        <option value="{{ b.pk }}" {% if selected.last_batch == b.pk|stringformat:"s" %}selected{% endif %}>
+          {{ b.file_name }} — {{ b.imported_at|date:"Y-m-d H:i" }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12">
+    <label class="form-label mb-1">Área / país</label>
+    <select name="team_code" class="form-select">
+      <option value="">Todas</option>
+      {% for opt in filtros.team_code_options %}
+        <option value="{{ opt.code }}" {% if selected.team_code == opt.code %}selected{% endif %}>{{ opt.label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12">
+    <label class="form-label mb-1">Estado</label>
+    <select name="status" class="form-select">
+      <option value="">Todos</option>
+      {% for value, label in filtros.statuses %}
+        <option value="{{ value }}" {% if selected.status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12">
+    <label class="form-label mb-1">Prioridad</label>
+    <select name="priority" class="form-select">
+      <option value="">Todas</option>
+      {% for value, label in filtros.priorities %}
+        <option value="{{ value }}" {% if selected.priority == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12">
+    <label class="form-label mb-1">Etapa</label>
+    <select name="stage" class="form-select">
+      <option value="">Todas</option>
+      {% for value, label in filtros.stages %}
+        <option value="{{ value }}" {% if selected.stage == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12">
+    <label class="form-label mb-1">Buscar</label>
+    <input type="text" name="q" value="{{ selected.q }}" class="form-control" placeholder="Asunto o ID">
+  </div>
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Filtrar</button>
+    <a href="{% url 'tickets:ticket_list' %}" class="btn btn-outline-secondary">Limpiar</a>
+  </div>
+</form>
+
+<p class="text-muted">{{ total_filtrado }} ticket(s) encontrados (se muestran máx. 500).</p>
+
+<div class="table-responsive">
+  <table class="table table-sm table-striped">
+    <thead>
+      <tr>
+        <th>Ticket</th><th>Asunto</th><th>Solicitante</th><th>Área</th><th>Agente</th>
+        <th>Prioridad</th><th>Estado</th><th>Etapa</th><th>Creado</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tickets %}
+      <tr>
+        <td>{{ t.tracking_id }}</td>
+        <td>{{ t.subject|truncatechars:50 }}</td>
+        <td>{{ t.requester_name }}</td>
+        <td>{{ area_names|get_item:t.team_code|default:t.team_code }}</td>
+        <td>{{ t.owner_name|default:"—" }}</td>
+        <td>
+          <span class="badge {% if t.priority == 'Alta' %}text-bg-danger{% elif t.priority == 'Media' %}text-bg-warning{% else %}text-bg-secondary{% endif %}">
+            {{ t.priority|default:"—" }}
+          </span>
+        </td>
+        <td>
+          <span class="badge {% if t.status == 'Resuelto' %}text-bg-success{% else %}text-bg-info{% endif %}">
+            {{ t.status|default:"—" }}
+          </span>
+        </td>
+        <td>{{ t.stage }}</td>
+        <td>{{ t.created_at|date:"Y-m-d H:i" }}</td>
+        <td>{% if t.ticket_url %}<a href="{{ t.ticket_url }}" target="_blank" rel="noopener">Abrir</a>{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="10" class="text-muted">No hay tickets que coincidan con los filtros.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
