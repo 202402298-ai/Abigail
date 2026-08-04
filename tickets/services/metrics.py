@@ -7,6 +7,7 @@ from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from tickets.models import TeamArea, Ticket
+from tickets.services.history_parser import eventos_de_actividad
 
 
 def resumen(tickets_qs):
@@ -198,21 +199,34 @@ def tendencia_temporal(tickets_qs):
     return creados, resueltos
 
 
-def resueltos_por_tecnico(area_team_code):
+DIAS_RANKING_RESOLUTORES = 30
+
+
+def resueltos_por_tecnico(area_team_code, dias=DIAS_RANKING_RESOLUTORES):
     """Ranking de técnicos que más han resuelto tickets en un área específica
-    (según el análisis del historial, no el Propietario final del ticket —
-    ver services/history_parser.py) y su tiempo promedio de resolución
-    (el tiempo que tuvieron el ticket asignado, no el ciclo de vida completo).
+    en el último mes (según el análisis del historial, no el Propietario
+    final del ticket — ver services/history_parser.py) y su tiempo promedio
+    de resolución (el tiempo que tuvieron el ticket asignado, no el ciclo de
+    vida completo).
 
     Usa el área tal como quedó registrada en el momento en que se resolvió
     cada ticket, por eso consulta directamente sobre todos los tickets
     (Ticket.objects) en vez del queryset ya filtrado por área actual del
     dashboard: el Propietario final casi siempre queda en ITSM, así que
     filtrar por team_code actual excluiría lo que resolvieron los técnicos.
+
+    Se filtra por ``resuelto_por_fecha`` (el momento del evento en el
+    historial) y no por el campo "Resuelto en" del XML, porque HESK lo deja
+    vacío en la gran mayoría de los tickets aunque sí estén resueltos. Solo
+    cuentan los tickets que siguen en estado Resuelto ahora mismo — si un
+    ticket se reabrió después de pasar por Pre-Cierre, no cuenta como
+    resuelto todavía.
     """
+    desde = timezone.now() - datetime.timedelta(days=dias)
     resueltos = (
-        Ticket.objects.filter(resuelto_por_team_code=area_team_code)
+        Ticket.objects.filter(resuelto_por_team_code=area_team_code, status=Ticket.STATUS_RESUELTO)
         .exclude(resuelto_por_nombre='')
+        .filter(resuelto_por_fecha__gte=desde)
         .values('resuelto_por_nombre')
         .annotate(
             total=Count('id'),
@@ -231,3 +245,38 @@ def resueltos_por_tecnico(area_team_code):
             ),
         })
     return filas
+
+
+def actividad_diaria_itsm(dias=5):
+    """Para cada integrante de ITSM, cuántos tickets DISTINTOS tocó cada uno
+    de los últimos ``dias`` días — se cuenta cualquier actualización
+    (asignación, cambio de categoría o de estado, cierre...), no solo
+    resoluciones. Un ticket que la misma persona actualiza varias veces el
+    mismo día cuenta una sola vez ese día.
+
+    ITSM puede tocar tickets de cualquier área (no solo los que terminan con
+    team_code=ITSM), así que se recorre el historial de todos los tickets
+    con actividad reciente, no solo los del área ITSM.
+    """
+    hoy = timezone.localdate()
+    fechas = [hoy - datetime.timedelta(days=i) for i in range(dias - 1, -1, -1)]
+    fechas_set = set(fechas)
+
+    desde_dt = timezone.now() - datetime.timedelta(days=dias)
+    candidatos = Ticket.objects.filter(updated_at__gte=desde_dt).exclude(history_raw='')
+
+    # tickets_tocados[(nombre, fecha)] = set de ids de ticket
+    tickets_tocados = {}
+    for t in candidatos.iterator():
+        for fecha, team, nombre in eventos_de_actividad(t.history_raw):
+            if team != 'ITSM' or fecha not in fechas_set:
+                continue
+            tickets_tocados.setdefault(nombre, {}).setdefault(fecha, set()).add(t.pk)
+
+    filas = []
+    for nombre, por_fecha in tickets_tocados.items():
+        valores = [len(por_fecha.get(f, ())) for f in fechas]
+        filas.append({'nombre': nombre, 'valores': valores, 'total': sum(valores)})
+    filas.sort(key=lambda f: f['total'], reverse=True)
+
+    return fechas, filas

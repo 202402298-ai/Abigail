@@ -62,6 +62,21 @@ def dashboard(request):
     carga_agentes = metrics.carga_por_agente(tickets_qs)
 
     ranking_resolutores = metrics.resueltos_por_tecnico(area_activa) if area_activa else []
+    semanas_periodo = metrics.DIAS_RANKING_RESOLUTORES / 7
+    for fila in ranking_resolutores:
+        fila['promedio_semanal'] = round(fila['total'] / semanas_periodo, 1)
+
+    # Para ITSM, "quien cierra el ticket es quien le da seguimiento": la
+    # gráfica muestra el promedio semanal en vez del total del mes (para
+    # las demás áreas se deja el total, tal como estaba).
+    if area_activa == 'ITSM':
+        ranking_resolutores_chart = [r['promedio_semanal'] for r in ranking_resolutores]
+    else:
+        ranking_resolutores_chart = [r['total'] for r in ranking_resolutores]
+
+    fechas_actividad, actividad_diaria = (
+        metrics.actividad_diaria_itsm() if area_activa == 'ITSM' else ([], [])
+    )
 
     chart_data = {
         'por_area_pais': {
@@ -86,7 +101,7 @@ def dashboard(request):
         },
         'ranking_resolutores': {
             'labels': [r['nombre'] for r in ranking_resolutores],
-            'data': [r['total'] for r in ranking_resolutores],
+            'data': ranking_resolutores_chart,
         },
     }
 
@@ -105,6 +120,8 @@ def dashboard(request):
         'tiempos_por_area': tiempos_por_area,
         'carga_agentes': carga_agentes[:15],
         'ranking_resolutores': ranking_resolutores,
+        'fechas_actividad': fechas_actividad,
+        'actividad_diaria': actividad_diaria,
         'chart_data': chart_data,
         'area_names': {ta.team_code: ta.display_name for ta in TeamArea.objects.all()},
         'ultima_importacion': ImportBatch.objects.first(),

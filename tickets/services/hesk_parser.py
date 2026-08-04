@@ -7,6 +7,8 @@ encabezado para mapear nombre de columna -> índice, de modo que el parser
 sobrevive a que HESK reordene o agregue columnas entre exportaciones.
 """
 import datetime
+import io
+import re
 import xml.etree.ElementTree as ET
 
 from django.utils import timezone
@@ -27,6 +29,34 @@ _STAGE_MAP = {
 
 class HeskParseError(ValueError):
     """Se lanza cuando el archivo no tiene la forma esperada de export HESK."""
+
+
+# Caracteres válidos según XML 1.0: tab, salto de línea, retorno de carro, y
+# los rangos U+0020-D7FF / U+E000-FFFD / U+10000-10FFFF. Todo lo demás (p.ej.
+# bytes de control tipo File/Group/Record/Unit Separator, 0x1C-0x1F) rompe el
+# parser aunque esté "escapado", porque ni siquiera son válidos como
+# referencia de carácter. A veces un ticket trae pegado un log crudo (de red,
+# de seguridad, etc.) con esos bytes, y HESK los exporta tal cual sin
+# sanearlos. Se construye con chr() en vez de escribir los caracteres
+# literales en el archivo para evitar problemas de codificación al guardar
+# este .py.
+_XML_VALID_RANGES = (
+    '\t\n\r'
+    + chr(0x20) + '-' + chr(0xD7FF)
+    + chr(0xE000) + '-' + chr(0xFFFD)
+    + '\U00010000-\U0010FFFF'
+)
+_INVALID_XML_CHARS_RE = re.compile('[^' + _XML_VALID_RANGES + ']')
+
+
+def _sanitize_xml(file_obj):
+    """Lee el archivo completo, descarta bytes/caracteres no válidos en XML
+    y devuelve un stream de texto listo para ``ET.parse``."""
+    raw = file_obj.read()
+    if isinstance(raw, bytes):
+        raw = raw.decode('utf-8', errors='replace')
+    limpio = _INVALID_XML_CHARS_RE.sub('', raw)
+    return io.StringIO(limpio)
 
 
 def _cell_ns_tag(tag):
@@ -57,7 +87,11 @@ def _row_values(row_elem, num_columns):
 
 def read_rows(file_obj):
     """Lee el archivo y devuelve (encabezados, filas_de_datos_como_listas_de_texto)."""
-    tree = ET.parse(file_obj)
+    try:
+        tree = ET.parse(file_obj)
+    except ET.ParseError:
+        file_obj.seek(0)
+        tree = ET.parse(_sanitize_xml(file_obj))
     root = tree.getroot()
 
     worksheet = root.find('ss:Worksheet', NS)

@@ -190,6 +190,10 @@ class Ticket(models.Model):
     resuelto_por_team_code = models.CharField(max_length=30, blank=True)
     resuelto_por_nombre = models.CharField(max_length=255, blank=True)
     tiempo_resolucion_tecnico_segundos = models.PositiveIntegerField(null=True, blank=True)
+    # Fecha del evento de resolución (cuándo se movió a Pre-Cierre / se
+    # devolvió a ITSM). Se usa para reportes "del último mes" en vez del
+    # campo "Resuelto en" del XML, que HESK deja vacío casi siempre.
+    resuelto_por_fecha = models.DateTimeField(null=True, blank=True)
 
     # Campo manual (no viene del XML de HESK): notas de seguimiento que el
     # equipo va escribiendo en el módulo "Seguimiento detallado". Se

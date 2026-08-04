@@ -1,6 +1,6 @@
 {% extends "tickets/base.html" %}
 {% load ticket_extras %}
-{% block title %}Dashboard — Seguimiento ITSM{% endblock %}
+{% block title %}Dashboard — ITSM Abigail{% endblock %}
 
 {% block content %}
 
@@ -43,6 +43,14 @@
     Todavía no hay ninguna importación. <a href="{% url 'tickets:upload' %}">Sube tu primer archivo XML</a> para ver el dashboard.
   </div>
 {% else %}
+
+{% if area_activa %}
+<div class="mb-3">
+  <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportarGraficosPDF()">
+    <i class="bi bi-file-earmark-pdf"></i> Exportar gráficos a PDF
+  </button>
+</div>
+{% endif %}
 
 <div class="row g-3 mb-4">
   {% if not area_activa %}
@@ -88,12 +96,48 @@
       <div class="card-body"><canvas id="chartAreaFuncional"></canvas></div>
     </div>
   </div>
+  {% elif area_activa == 'ITSM' %}
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Tickets que le da seguimiento cada técnico
+        <small class="text-muted d-block">Promedio semanal · último mes · quien cierra el ticket es quien le da seguimiento</small>
+      </div>
+      <div class="card-body"><canvas id="chartResolutores"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Seguimiento por técnico
+        <small class="text-muted d-block">Último mes</small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Técnico</th><th>Total (mes)</th><th>Promedio semanal</th></tr></thead>
+            <tbody>
+              {% for row in ranking_resolutores %}
+              <tr>
+                <td>{{ row.nombre }}</td>
+                <td>{{ row.total }}</td>
+                <td>{{ row.promedio_semanal }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-muted">Sin tickets con seguimiento atribuible todavía.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
   {% else %}
   <div class="col-lg-6">
     <div class="card h-100">
       <div class="card-header">
         Técnicos que más resuelven en {{ area_names|get_item:area_activa|default:area_activa }}
-        <small class="text-muted d-block">Según quién movió el ticket a Pre-Cierre / lo devolvió a ITSM por última vez</small>
+        <small class="text-muted d-block">Último mes · según quién movió el ticket a Pre-Cierre / lo devolvió a ITSM por última vez</small>
       </div>
       <div class="card-body"><canvas id="chartResolutores"></canvas></div>
     </div>
@@ -102,7 +146,7 @@
     <div class="card h-100">
       <div class="card-header">
         Tiempo promedio de resolución por técnico
-        <small class="text-muted d-block">Tiempo que tuvieron el ticket asignado, no el ciclo de vida completo</small>
+        <small class="text-muted d-block">Último mes · tiempo que tuvieron el ticket asignado, no el ciclo de vida completo</small>
       </div>
       <div class="card-body p-0">
         <div class="table-responsive">
@@ -131,6 +175,7 @@
       <div class="card-body"><canvas id="chartEstado"></canvas></div>
     </div>
   </div>
+  {% if area_activa != 'ITSM' %}
   <div class="col-lg-6">
     <div class="card h-100">
       <div class="card-header">Tiempo abierto (tickets activos)</div>
@@ -166,7 +211,41 @@
       </div>
     </div>
   </div>
+  {% endif %}
 </div>
+
+{% if area_activa == 'ITSM' %}
+<div class="card mb-4">
+  <div class="card-header">
+    Tickets que ve cada técnico al día
+    <small class="text-muted d-block">Últimos {{ fechas_actividad|length }} días · cuenta tickets donde hizo alguna actualización ese día (no solo resoluciones)</small>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th>Técnico</th>
+            {% for fecha in fechas_actividad %}<th class="text-center">{{ fecha|date:"D d/m" }}</th>{% endfor %}
+            <th class="text-center">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fila in actividad_diaria %}
+          <tr>
+            <td>{{ fila.nombre }}</td>
+            {% for valor in fila.valores %}<td class="text-center">{{ valor }}</td>{% endfor %}
+            <td class="text-center fw-bold">{{ fila.total }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="{{ fechas_actividad|length|add:2 }}" class="text-muted">Sin actividad de ITSM en estos días todavía.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <div class="row g-3 mb-4">
   <div class="col-lg-6">
@@ -285,7 +364,7 @@ new Chart(document.getElementById('chartAreaFuncional'), {
 {% else %}
 new Chart(document.getElementById('chartResolutores'), {
   type: 'bar',
-  data: { labels: chartData.ranking_resolutores.labels, datasets: [{ label: 'Resueltos', data: chartData.ranking_resolutores.data, backgroundColor: palette[5] }] },
+  data: { labels: chartData.ranking_resolutores.labels, datasets: [{ label: '{% if area_activa == "ITSM" %}Promedio semanal{% else %}Resueltos{% endif %}', data: chartData.ranking_resolutores.data, backgroundColor: palette[5] }] },
   options: { indexAxis: 'y', layout: { padding: { right: 40 } }, plugins: { legend: { display: false }, datalabels: pctLabels({ anchor: 'end', align: 'right' }) } }
 });
 {% endif %}
@@ -296,6 +375,7 @@ new Chart(document.getElementById('chartEstado'), {
   options: { plugins: { datalabels: pctLabels({ color: '#fff', anchor: 'center', align: 'center', size: 11 }) } }
 });
 
+{% if area_activa != 'ITSM' %}
 new Chart(document.getElementById('chartTiempoAbierto'), {
   type: 'bar',
   data: { labels: chartData.tiempo_abierto.labels, datasets: [{ label: 'Tickets', data: chartData.tiempo_abierto.data, backgroundColor: palette[3] }] },
@@ -307,7 +387,60 @@ new Chart(document.getElementById('chartPrioridad'), {
   data: { labels: chartData.por_prioridad.labels, datasets: [{ data: chartData.por_prioridad.data, backgroundColor: palette }] },
   options: { plugins: { datalabels: pctLabels({ color: '#fff', anchor: 'center', align: 'center', size: 11 }) } }
 });
+{% endif %}
 
 </script>
+
+{% if area_activa %}
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>
+function exportarGraficosPDF() {
+  const areaNombre = "{{ area_names|get_item:area_activa|default:area_activa|escapejs }}";
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  const usableWidth = pageWidth - margin * 2;
+
+  doc.setFontSize(16);
+  doc.text(`ITSM Abigail — ${areaNombre}`, margin, 15);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text(`Generado: ${new Date().toLocaleString('es-HN')}`, margin, 21);
+  doc.setTextColor(0);
+
+  let y = 30;
+  const graficos = [
+    { id: 'chartResolutores', titulo: '{% if area_activa == "ITSM" %}Tickets que le da seguimiento cada técnico (promedio semanal){% else %}Técnicos que más resuelven (último mes){% endif %}' },
+    { id: 'chartEstado', titulo: 'Tickets por estado' },
+    { id: 'chartTiempoAbierto', titulo: 'Tiempo abierto (tickets activos)' },
+    { id: 'chartPrioridad', titulo: 'Distribución por prioridad' },
+  ];
+
+  graficos.forEach(({ id, titulo }) => {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    const imgData = canvas.toDataURL('image/png', 1.0);
+    const imgWidth = usableWidth;
+    const imgHeight = (canvas.height / canvas.width) * imgWidth;
+
+    if (y + imgHeight + 12 > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
+    }
+
+    doc.setFontSize(12);
+    doc.text(titulo, margin, y);
+    y += 5;
+    doc.addImage(imgData, 'PNG', margin, y, imgWidth, imgHeight);
+    y += imgHeight + 12;
+  });
+
+  const fecha = new Date().toISOString().slice(0, 10);
+  doc.save(`seguimiento-itsm-${areaNombre.replace(/\s+/g, '_')}-${fecha}.pdf`);
+}
+</script>
+{% endif %}
 {% endif %}
 {% endblock %}

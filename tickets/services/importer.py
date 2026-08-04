@@ -13,6 +13,8 @@ así que su ausencia no significa que dejaron de existir.
 """
 from dataclasses import dataclass
 
+from django.utils import timezone
+
 from ..models import ImportBatch, Ticket
 from .history_parser import analizar_historial
 
@@ -29,6 +31,7 @@ _CAMPOS_COMPARABLES = [
     # recalculan en cada importación porque el historial puede crecer con
     # eventos nuevos entre una exportación y la siguiente.
     'resuelto_por_team_code', 'resuelto_por_nombre', 'tiempo_resolucion_tecnico_segundos',
+    'resuelto_por_fecha',
 ]
 
 
@@ -69,10 +72,13 @@ def importar_tickets(filas, file_name, user) -> ResultadoImportacion:
             fila['resuelto_por_team_code'],
             fila['resuelto_por_nombre'],
             fila['tiempo_resolucion_tecnico_segundos'],
+            fila['resuelto_por_fecha'],
         ) = analizar_historial(fila['history_raw'])
         # Los CharField no aceptan None (deben quedar como '' si no aplica).
         fila['resuelto_por_team_code'] = fila['resuelto_por_team_code'] or ''
         fila['resuelto_por_nombre'] = fila['resuelto_por_nombre'] or ''
+        if fila['resuelto_por_fecha'] is not None and timezone.is_naive(fila['resuelto_por_fecha']):
+            fila['resuelto_por_fecha'] = timezone.make_aware(fila['resuelto_por_fecha'])
 
         if existente is None:
             datos = {k: v for k, v in fila.items() if k != 'tracking_id'}
