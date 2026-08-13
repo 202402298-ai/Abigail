@@ -19,6 +19,14 @@ def _areas_gestionadas(user):
     )
 
 
+_DIAS_ABREV_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+
+def _etiqueta_dia(fecha):
+    """'2026-07-27' (lunes) -> 'Lun 27/07'."""
+    return f'{_DIAS_ABREV_ES[fecha.weekday()]} {fecha.strftime("%d/%m")}'
+
+
 def _tickets_visibles(user):
     """Ticket queryset que le corresponde ver a este usuario: si es jefe de
     una o más áreas, solo las suyas; si no, todo el sistema."""
@@ -78,6 +86,22 @@ def dashboard(request):
         metrics.actividad_diaria_itsm() if area_activa == 'ITSM' else ([], [])
     )
 
+    # ITSM tiene su propio set de reportes (ver más abajo); "Todas" y el
+    # resto de áreas comparten estos.
+    mostrar_reportes_area = area_activa != 'ITSM'
+
+    nuevos_por_dia = metrics.tickets_nuevos_por_dia(tickets_qs) if mostrar_reportes_area else []
+    nuevos_por_dia_labels = [_etiqueta_dia(fila['fecha']) for fila in nuevos_por_dia]
+
+    # "Tickets resueltos por día" solo tiene sentido para un área específica
+    # (no para "Todas", que mezclaría resolutores de áreas distintas en un
+    # mismo total sin desglose).
+    resueltos_por_dia = (
+        metrics.tickets_resueltos_por_dia(area_activa)
+        if area_activa and area_activa != 'ITSM' else []
+    )
+    resueltos_por_dia_labels = [_etiqueta_dia(fila['fecha']) for fila in resueltos_por_dia]
+
     chart_data = {
         'por_area_pais': {
             'labels': [d['display_name'] for d in por_area_pais],
@@ -103,6 +127,14 @@ def dashboard(request):
             'labels': [r['nombre'] for r in ranking_resolutores],
             'data': ranking_resolutores_chart,
         },
+        'nuevos_por_dia': {
+            'labels': nuevos_por_dia_labels,
+            'data': [fila['total'] for fila in nuevos_por_dia],
+        },
+        'resueltos_por_dia': {
+            'labels': resueltos_por_dia_labels,
+            'data': [fila['total'] for fila in resueltos_por_dia],
+        },
     }
 
     context = {
@@ -119,6 +151,7 @@ def dashboard(request):
         'tiempos_por_prioridad': tiempos_por_prioridad,
         'tiempos_por_area': tiempos_por_area,
         'carga_agentes': carga_agentes[:15],
+        'mostrar_reportes_area': mostrar_reportes_area,
         'ranking_resolutores': ranking_resolutores,
         'fechas_actividad': fechas_actividad,
         'actividad_diaria': actividad_diaria,

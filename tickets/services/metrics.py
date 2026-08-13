@@ -280,3 +280,46 @@ def actividad_diaria_itsm(dias=5):
     filas.sort(key=lambda f: f['total'], reverse=True)
 
     return fechas, filas
+
+
+def tickets_nuevos_por_dia(tickets_qs, dias=7):
+    """Cuántos tickets se crearon cada día, en los últimos ``dias`` días
+    (para la gráfica de barras de "tickets nuevos por día" del dashboard)."""
+    hoy = timezone.localdate()
+    fechas = [hoy - datetime.timedelta(days=i) for i in range(dias - 1, -1, -1)]
+    desde = timezone.now() - datetime.timedelta(days=dias)
+
+    conteo = (
+        tickets_qs.filter(created_at__gte=desde)
+        .annotate(dia=TruncDate('created_at'))
+        .values('dia')
+        .annotate(total=Count('id'))
+    )
+    mapa = {row['dia']: row['total'] for row in conteo}
+    return [{'fecha': f, 'total': mapa.get(f, 0)} for f in fechas]
+
+
+def tickets_resueltos_por_dia(area_team_code, dias=7):
+    """Cuántos tickets resolvió esta área cada día, en los últimos ``dias``
+    días. Usa ``resuelto_por_fecha`` (el momento del evento en el
+    historial — ver history_parser) y no el campo "Resuelto en" del XML,
+    que HESK deja vacío en la gran mayoría de los tickets. Por eso, igual
+    que en ``resueltos_por_tecnico``, se consulta directamente sobre todos
+    los tickets en vez del queryset ya filtrado por el team_code actual del
+    dashboard."""
+    hoy = timezone.localdate()
+    fechas = [hoy - datetime.timedelta(days=i) for i in range(dias - 1, -1, -1)]
+    desde = timezone.now() - datetime.timedelta(days=dias)
+
+    conteo = (
+        Ticket.objects.filter(
+            resuelto_por_team_code=area_team_code,
+            status=Ticket.STATUS_RESUELTO,
+            resuelto_por_fecha__gte=desde,
+        )
+        .annotate(dia=TruncDate('resuelto_por_fecha'))
+        .values('dia')
+        .annotate(total=Count('id'))
+    )
+    mapa = {row['dia']: row['total'] for row in conteo}
+    return [{'fecha': f, 'total': mapa.get(f, 0)} for f in fechas]

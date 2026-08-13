@@ -3,17 +3,23 @@ determinar qué técnico resolvió realmente el ticket y cuánto tiempo lo tuvo
 asignado, ya que el campo Propietario final casi siempre queda en ITSM
 (porque ITSM hace el pre-cierre y cierre), no en el técnico que lo trabajó.
 
-Regla (confirmada contra datos reales antes de implementarla):
-1. El resolutor es quien movió el ticket a la etapa "Pre-Cierre" por última
-   vez (si pasó por ahí más de una vez, se usa la más reciente).
-2. Si el ticket nunca pasó por Pre-Cierre, se usa como respaldo quien lo
-   devolvió a ITSM por última vez (último "asignado a ITSM ... por X").
+Regla (confirmada contra datos reales antes de implementarla, y ajustada
+después de detectar que en algunas áreas —p. ej. Transformación Digital— el
+técnico devuelve el ticket a ITSM ANTES de que ITSM haga el Pre-Cierre, así
+que había que priorizar la devolución sobre el Pre-Cierre y no al revés):
+1. El resolutor es quien devolvió el ticket a ITSM por última vez (último
+   "asignado a ITSM ... por X") — esto cubre tanto al técnico que termina su
+   parte y lo regresa, como a ITSM auto-asignándose un ticket que resuelve
+   sin involucrar a nadie más.
+2. Si el ticket nunca se le asignó a ITSM (poco común: p. ej. un técnico lo
+   cierra directamente sin devolverlo), se usa como respaldo quien lo movió
+   a la etapa "Pre-Cierre" por última vez.
 3. Si no ocurrió ninguno de los dos, es porque ITSM resolvió el ticket
-   directamente sin involucrar a otra área — en ese caso (y SOLO en ese
-   caso, es decir, solo para atribuir resoluciones al área ITSM) se usa
-   como respaldo quien lo cerró ("cerrado por X" o "movido a la categoría
-   ... Cerrado por X"). Esta regla 3 no aplica a las demás áreas: ahí el
-   resolutor siempre sale de las reglas 1 o 2.
+   directamente sin involucrar a otra área y sin pasar por Pre-Cierre — en
+   ese caso (y SOLO en ese caso, es decir, solo para atribuir resoluciones
+   al área ITSM) se usa como respaldo quien lo cerró ("cerrado por X" o
+   "movido a la categoría ... Cerrado por X"). Esta regla 3 no aplica a las
+   demás áreas: ahí el resolutor siempre sale de las reglas 1 o 2.
 
 El "tiempo de resolución del técnico" es la diferencia entre el momento en
 que se le asignó el ticket por última vez (antes de resolverlo) y el
@@ -72,23 +78,23 @@ def analizar_historial(history_raw):
 
     resolver = None
     for e in eventos:
-        m = _CATEGORIA_RE.match(e['texto'])
-        if m and 'pre-cierre' in m.group('categoria').lower():
-            team, name = _split_actor(m.group('actor'))
-            if team and name:
-                resolver = {'ts': e['ts'], 'team': team, 'name': name}
+        m = _ASIGNADO_RE.match(e['texto'])
+        if not m:
+            continue
+        target_team, _ = _split_actor(m.group('target'))
+        if target_team != 'ITSM':
+            continue
+        actor_team, actor_name = _split_actor(m.group('actor'))
+        if actor_team and actor_name:
+            resolver = {'ts': e['ts'], 'team': actor_team, 'name': actor_name}
 
     if resolver is None:
         for e in eventos:
-            m = _ASIGNADO_RE.match(e['texto'])
-            if not m:
-                continue
-            target_team, _ = _split_actor(m.group('target'))
-            if target_team != 'ITSM':
-                continue
-            actor_team, actor_name = _split_actor(m.group('actor'))
-            if actor_team and actor_name:
-                resolver = {'ts': e['ts'], 'team': actor_team, 'name': actor_name}
+            m = _CATEGORIA_RE.match(e['texto'])
+            if m and 'pre-cierre' in m.group('categoria').lower():
+                team, name = _split_actor(m.group('actor'))
+                if team and name:
+                    resolver = {'ts': e['ts'], 'team': team, 'name': name}
 
     if resolver is None:
         # Respaldo exclusivo para ITSM: si nadie pasó el ticket por

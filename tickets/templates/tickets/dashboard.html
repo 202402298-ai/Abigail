@@ -76,8 +76,9 @@
   </div>
 </div>
 
+{% if not area_activa %}
+{# ==================== TODAS LAS ÁREAS ==================== #}
 <div class="row g-3 mb-4">
-  {% if not area_activa %}
   <div class="col-lg-6">
     <div class="card h-100">
       <div class="card-header">
@@ -96,86 +97,12 @@
       <div class="card-body"><canvas id="chartAreaFuncional"></canvas></div>
     </div>
   </div>
-  {% elif area_activa == 'ITSM' %}
-  <div class="col-lg-6">
-    <div class="card h-100">
-      <div class="card-header">
-        Tickets que le da seguimiento cada técnico
-        <small class="text-muted d-block">Promedio semanal · último mes · quien cierra el ticket es quien le da seguimiento</small>
-      </div>
-      <div class="card-body"><canvas id="chartResolutores"></canvas></div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card h-100">
-      <div class="card-header">
-        Seguimiento por técnico
-        <small class="text-muted d-block">Último mes</small>
-      </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm mb-0">
-            <thead><tr><th>Técnico</th><th>Total (mes)</th><th>Promedio semanal</th></tr></thead>
-            <tbody>
-              {% for row in ranking_resolutores %}
-              <tr>
-                <td>{{ row.nombre }}</td>
-                <td>{{ row.total }}</td>
-                <td>{{ row.promedio_semanal }}</td>
-              </tr>
-              {% empty %}
-              <tr><td colspan="3" class="text-muted">Sin tickets con seguimiento atribuible todavía.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-  {% else %}
-  <div class="col-lg-6">
-    <div class="card h-100">
-      <div class="card-header">
-        Técnicos que más resuelven en {{ area_names|get_item:area_activa|default:area_activa }}
-        <small class="text-muted d-block">Último mes · según quién movió el ticket a Pre-Cierre / lo devolvió a ITSM por última vez</small>
-      </div>
-      <div class="card-body"><canvas id="chartResolutores"></canvas></div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card h-100">
-      <div class="card-header">
-        Tiempo promedio de resolución por técnico
-        <small class="text-muted d-block">Último mes · tiempo que tuvieron el ticket asignado, no el ciclo de vida completo</small>
-      </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm mb-0">
-            <thead><tr><th>Técnico</th><th>Resueltos</th><th>Tiempo prom.</th></tr></thead>
-            <tbody>
-              {% for row in ranking_resolutores %}
-              <tr>
-                <td>{{ row.nombre }}</td>
-                <td>{{ row.total }}</td>
-                <td>{{ row.avg_duracion|duracion }}</td>
-              </tr>
-              {% empty %}
-              <tr><td colspan="3" class="text-muted">Sin tickets resueltos atribuibles a un técnico en esta área todavía.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-  {% endif %}
   <div class="col-lg-6">
     <div class="card h-100">
       <div class="card-header">Tickets por estado</div>
       <div class="card-body"><canvas id="chartEstado"></canvas></div>
     </div>
   </div>
-  {% if area_activa != 'ITSM' %}
   <div class="col-lg-6">
     <div class="card h-100">
       <div class="card-header">Tiempo abierto (tickets activos)</div>
@@ -211,10 +138,115 @@
       </div>
     </div>
   </div>
-  {% endif %}
 </div>
 
-{% if area_activa == 'ITSM' %}
+<div class="card mb-4">
+  <div class="card-header">
+    Tickets recibidos por día
+    <small class="text-muted d-block">Últimos 7 días · todas las áreas</small>
+  </div>
+  <div class="card-body"><canvas id="chartNuevosPorDia"></canvas></div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Tiempos de servicio promedio
+        <small class="text-muted d-block">Global: primera respuesta {{ tiempos_global.avg_respuesta|duracion }} · resolución {{ tiempos_global.avg_resolucion|duracion }}</small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Prioridad</th><th>Resolución prom.</th><th>Tickets</th></tr></thead>
+            <tbody>
+              {% for row in tiempos_por_prioridad %}
+              <tr>
+                <td>{{ row.priority|default:"—" }}</td>
+                <td>{{ row.avg_resolucion|duracion }}</td>
+                <td>{{ row.total }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Carga activa por técnico
+        <small class="text-muted d-block">Top 15 · todas las áreas · tickets activos, de mayor a menor</small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Agente</th><th>Área</th><th>Activos</th></tr></thead>
+            <tbody>
+              {% for row in carga_agentes %}
+              <tr>
+                <td>{{ row.owner_name }}</td>
+                <td>{{ row.display_name }}</td>
+                <td>{{ row.total }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-muted">Sin datos.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% elif area_activa == 'ITSM' %}
+{# ==================== ITSM ==================== #}
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Tickets que le da seguimiento cada técnico
+        <small class="text-muted d-block">Promedio semanal · último mes · quien cierra el ticket es quien le da seguimiento</small>
+      </div>
+      <div class="card-body"><canvas id="chartResolutores"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Seguimiento por técnico
+        <small class="text-muted d-block">Último mes</small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Técnico</th><th>Total (mes)</th><th>Promedio semanal</th></tr></thead>
+            <tbody>
+              {% for row in ranking_resolutores %}
+              <tr>
+                <td>{{ row.nombre }}</td>
+                <td>{{ row.total }}</td>
+                <td>{{ row.promedio_semanal }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-muted">Sin tickets con seguimiento atribuible todavía.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Tickets por estado</div>
+      <div class="card-body"><canvas id="chartEstado"></canvas></div>
+    </div>
+  </div>
+</div>
+
 <div class="card mb-4">
   <div class="card-header">
     Tickets que ve cada técnico al día
@@ -245,49 +277,78 @@
     </div>
   </div>
 </div>
-{% endif %}
+
+{% else %}
+{# ==================== ÁREA ESPECÍFICA (equipos locales y de negocio, no ITSM) ==================== #}
+<div class="card mb-4">
+  <div class="card-header">
+    Carga activa por técnico
+    <small class="text-muted d-block">Top 15 · {{ area_names|get_item:area_activa|default:area_activa }} · tickets activos, de mayor a menor</small>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Agente</th><th>Área</th><th>Activos</th></tr></thead>
+        <tbody>
+          {% for row in carga_agentes %}
+          <tr>
+            <td>{{ row.owner_name }}</td>
+            <td>{{ row.display_name }}</td>
+            <td>{{ row.total }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="text-muted">Sin datos.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <div class="row g-3 mb-4">
   <div class="col-lg-6">
     <div class="card h-100">
       <div class="card-header">
-        Tiempos de servicio promedio
-        <small class="text-muted d-block">Global: primera respuesta {{ tiempos_global.avg_respuesta|duracion }} · resolución {{ tiempos_global.avg_resolucion|duracion }}</small>
+        Tickets recibidos por día
+        <small class="text-muted d-block">Últimos 7 días · {{ area_names|get_item:area_activa|default:area_activa }}</small>
       </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-sm mb-0">
-            <thead><tr><th>Prioridad</th><th>Resolución prom.</th><th>Tickets</th></tr></thead>
-            <tbody>
-              {% for row in tiempos_por_prioridad %}
-              <tr>
-                <td>{{ row.priority|default:"—" }}</td>
-                <td>{{ row.avg_resolucion|duracion }}</td>
-                <td>{{ row.total }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <div class="card-body"><canvas id="chartNuevosPorDia"></canvas></div>
     </div>
   </div>
   <div class="col-lg-6">
     <div class="card h-100">
-      <div class="card-header">Carga activa por agente (top 15)</div>
+      <div class="card-header">
+        Tickets resueltos por día
+        <small class="text-muted d-block">Últimos 7 días · {{ area_names|get_item:area_activa|default:area_activa }}</small>
+      </div>
+      <div class="card-body"><canvas id="chartResueltosPorDia"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Tickets por estado</div>
+      <div class="card-body"><canvas id="chartEstado"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Nivel 2: por tipo y área/región</div>
       <div class="card-body p-0">
         <div class="table-responsive">
           <table class="table table-sm mb-0">
-            <thead><tr><th>Agente</th><th>Área</th><th>Activos</th></tr></thead>
+            <thead><tr><th>Tipo</th><th>Área / región</th><th>Tickets</th></tr></thead>
             <tbody>
-              {% for row in carga_agentes %}
+              {% for row in tipo_area %}
               <tr>
-                <td>{{ row.owner_name }}</td>
-                <td>{{ row.display_name }}</td>
+                <td>{{ row.request_type|default:"—" }}</td>
+                <td>{{ row.area_categoria|default:"—" }}</td>
                 <td>{{ row.total }}</td>
               </tr>
               {% empty %}
-              <tr><td colspan="3" class="text-muted">Sin datos.</td></tr>
+              <tr><td colspan="3" class="text-muted">Sin tickets en Nivel 2.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -296,6 +357,45 @@
     </div>
   </div>
 </div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Técnicos que más resuelven en {{ area_names|get_item:area_activa|default:area_activa }}
+        <small class="text-muted d-block">Último mes · según quién movió el ticket a Pre-Cierre / lo devolvió a ITSM por última vez</small>
+      </div>
+      <div class="card-body"><canvas id="chartResolutores"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Tiempo promedio de resolución por técnico
+        <small class="text-muted d-block">Último mes · tiempo que tuvieron el ticket asignado, no el ciclo de vida completo</small>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0">
+            <thead><tr><th>Técnico</th><th>Resueltos</th><th>Tiempo prom.</th></tr></thead>
+            <tbody>
+              {% for row in ranking_resolutores %}
+              <tr>
+                <td>{{ row.nombre }}</td>
+                <td>{{ row.total }}</td>
+                <td>{{ row.avg_duracion|duracion }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-muted">Sin tickets resueltos atribuibles a un técnico en esta área todavía.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <div class="card mb-4">
   <div class="card-header">Tickets activos más antiguos (top 15)</div>
@@ -375,7 +475,7 @@ new Chart(document.getElementById('chartEstado'), {
   options: { plugins: { datalabels: pctLabels({ color: '#fff', anchor: 'center', align: 'center', size: 11 }) } }
 });
 
-{% if area_activa != 'ITSM' %}
+{% if not area_activa %}
 new Chart(document.getElementById('chartTiempoAbierto'), {
   type: 'bar',
   data: { labels: chartData.tiempo_abierto.labels, datasets: [{ label: 'Tickets', data: chartData.tiempo_abierto.data, backgroundColor: palette[3] }] },
@@ -386,6 +486,22 @@ new Chart(document.getElementById('chartPrioridad'), {
   type: 'pie',
   data: { labels: chartData.por_prioridad.labels, datasets: [{ data: chartData.por_prioridad.data, backgroundColor: palette }] },
   options: { plugins: { datalabels: pctLabels({ color: '#fff', anchor: 'center', align: 'center', size: 11 }) } }
+});
+{% endif %}
+
+{% if area_activa != 'ITSM' %}
+new Chart(document.getElementById('chartNuevosPorDia'), {
+  type: 'bar',
+  data: { labels: chartData.nuevos_por_dia.labels, datasets: [{ label: 'Tickets nuevos', data: chartData.nuevos_por_dia.data, backgroundColor: palette[0] }] },
+  options: { layout: { padding: { top: 20 } }, plugins: { legend: { display: false }, datalabels: pctLabels() } }
+});
+{% endif %}
+
+{% if area_activa and area_activa != 'ITSM' %}
+new Chart(document.getElementById('chartResueltosPorDia'), {
+  type: 'bar',
+  data: { labels: chartData.resueltos_por_dia.labels, datasets: [{ label: 'Tickets resueltos', data: chartData.resueltos_por_dia.data, backgroundColor: palette[2] }] },
+  options: { layout: { padding: { top: 20 } }, plugins: { legend: { display: false }, datalabels: pctLabels() } }
 });
 {% endif %}
 
@@ -414,8 +530,8 @@ function exportarGraficosPDF() {
   const graficos = [
     { id: 'chartResolutores', titulo: '{% if area_activa == "ITSM" %}Tickets que le da seguimiento cada técnico (promedio semanal){% else %}Técnicos que más resuelven (último mes){% endif %}' },
     { id: 'chartEstado', titulo: 'Tickets por estado' },
-    { id: 'chartTiempoAbierto', titulo: 'Tiempo abierto (tickets activos)' },
-    { id: 'chartPrioridad', titulo: 'Distribución por prioridad' },
+    { id: 'chartNuevosPorDia', titulo: 'Tickets recibidos por día' },
+    { id: 'chartResueltosPorDia', titulo: 'Tickets resueltos por día' },
   ];
 
   graficos.forEach(({ id, titulo }) => {
