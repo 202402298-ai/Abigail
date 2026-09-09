@@ -119,10 +119,12 @@ class Ticket(models.Model):
     PRIORITY_BAJA = 'Baja'
     PRIORITY_MEDIA = 'Media'
     PRIORITY_ALTA = 'Alta'
+    PRIORITY_CRITICA = 'Crítica'
     PRIORITY_CHOICES = [
         (PRIORITY_BAJA, 'Baja'),
         (PRIORITY_MEDIA, 'Media'),
         (PRIORITY_ALTA, 'Alta'),
+        (PRIORITY_CRITICA, 'Crítica'),
     ]
 
     STATUS_NUEVO = 'Nuevo'

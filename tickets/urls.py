@@ -9,5 +9,11 @@ urlpatterns = [
     path('tickets/', views.ticket_list, name='ticket_list'),
     path('mis-areas/', views.mis_areas, name='mis_areas'),
     path('seguimiento/', views.seguimiento_detallado, name='seguimiento_detallado'),
+    path('reportes/infraestructura/', views.reporte_infraestructura, name='reporte_infraestructura'),
+    path(
+        'reportes/infraestructura/excel/',
+        views.reporte_infraestructura_excel,
+        name='reporte_infraestructura_excel',
+    ),
     path('subir/', views.upload_xml, name='upload'),
 ]

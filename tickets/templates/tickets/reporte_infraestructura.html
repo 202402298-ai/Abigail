@@ -1,0 +1,275 @@
+{% extends "tickets/base.html" %}
+{% block title %}Reporte de Infraestructura — ITSM Abigail{% endblock %}
+
+{% block content %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h4 class="mb-0"><i class="bi bi-hdd-rack-fill me-2"></i>Reporte de Infraestructura</h4>
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <form method="get" class="d-flex align-items-center gap-2">
+      <label class="mb-0 small text-muted">Mes:</label>
+      <select name="mes" class="form-select form-select-sm" onchange="this.form.submit()">
+        {% for opcion in opciones_mes %}
+          <option value="{{ opcion|date:'Y-m' }}" {% if opcion|date:'Y-m' == mes_actual %}selected{% endif %}>
+            {{ opcion|date:"F Y"|capfirst }}
+          </option>
+        {% endfor %}
+      </select>
+    </form>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportarGraficosPDF()">
+      <i class="bi bi-file-earmark-pdf"></i> Exportar PDF
+    </button>
+    <a href="{% url 'tickets:reporte_infraestructura_excel' %}?mes={{ mes_actual }}" class="btn btn-sm btn-outline-success">
+      <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+    </a>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card text-bg-success h-100">
+      <div class="card-body">
+        <div class="fs-2 fw-bold">{{ resueltos|length }}</div>
+        <div>Resueltos este mes</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card text-bg-warning h-100">
+      <div class="card-body">
+        <div class="fs-2 fw-bold">{{ pendientes|length }}</div>
+        <div>Pendientes ahora mismo</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">
+        Resueltos por técnico
+        <small class="text-muted d-block">Mes seleccionado</small>
+      </div>
+      <div class="card-body"><canvas id="chartPorTecnico"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Resueltos por día</div>
+      <div class="card-body"><canvas id="chartPorDia"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Resueltos por prioridad</div>
+      <div class="card-body"><canvas id="chartPrioridadResueltos"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header">Pendientes por estado</div>
+      <div class="card-body"><canvas id="chartEstadoPendientes"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">
+    Tickets resueltos
+    <small class="text-muted d-block">Técnico responsable y colaborador(es), según el historial de cada ticket</small>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Ticket</th><th>Creado</th><th>Resuelto</th><th>Responsable</th>
+            <th>Colaborador(es)</th><th>Prioridad</th><th>Asunto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fila in resueltos %}
+          <tr>
+            <td>
+              {% if fila.ticket.ticket_url %}
+                <a href="{{ fila.ticket.ticket_url }}" target="_blank" rel="noopener">{{ fila.ticket.hesk_row_id|default:fila.ticket.tracking_id }}</a>
+              {% else %}
+                {{ fila.ticket.hesk_row_id|default:fila.ticket.tracking_id }}
+              {% endif %}
+            </td>
+            <td>{{ fila.ticket.created_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ fila.ticket.resuelto_por_fecha|date:"d/m/Y H:i" }}</td>
+            <td>{{ fila.ticket.resuelto_por_nombre }}</td>
+            <td>{{ fila.colaboradores|join:", "|default:"—" }}</td>
+            <td>
+              <span class="badge
+                {% if fila.ticket.priority == 'Crítica' %}text-bg-dark
+                {% elif fila.ticket.priority == 'Alta' %}text-bg-danger
+                {% elif fila.ticket.priority == 'Media' %}text-bg-warning
+                {% else %}text-bg-secondary{% endif %}">
+                {{ fila.ticket.priority|default:"—" }}
+              </span>
+            </td>
+            <td>{{ fila.ticket.subject|truncatechars:60 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-muted">Sin tickets resueltos este mes.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">
+    Tickets pendientes
+    <small class="text-muted d-block">Todos los que Infraestructura todavía no ha resuelto, sin importar el mes</small>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Ticket</th><th>Creado</th><th>Estado</th><th>Asignado a</th>
+            <th>Prioridad</th><th>Asunto</th><th>Días abierto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fila in pendientes %}
+          <tr>
+            <td>
+              {% if fila.ticket.ticket_url %}
+                <a href="{{ fila.ticket.ticket_url }}" target="_blank" rel="noopener">{{ fila.ticket.hesk_row_id|default:fila.ticket.tracking_id }}</a>
+              {% else %}
+                {{ fila.ticket.hesk_row_id|default:fila.ticket.tracking_id }}
+              {% endif %}
+            </td>
+            <td>{{ fila.ticket.created_at|date:"d/m/Y H:i" }}</td>
+            <td><span class="badge text-bg-info">{{ fila.ticket.status }}</span></td>
+            <td>{{ fila.ticket.owner_name|default:"—" }}</td>
+            <td>
+              <span class="badge
+                {% if fila.ticket.priority == 'Crítica' %}text-bg-dark
+                {% elif fila.ticket.priority == 'Alta' %}text-bg-danger
+                {% elif fila.ticket.priority == 'Media' %}text-bg-warning
+                {% else %}text-bg-secondary{% endif %}">
+                {{ fila.ticket.priority|default:"—" }}
+              </span>
+            </td>
+            <td>{{ fila.ticket.subject|truncatechars:60 }}</td>
+            <td>
+              <span class="badge {% if fila.dias_abierto > 7 %}text-bg-danger{% elif fila.dias_abierto > 3 %}text-bg-warning{% else %}text-bg-secondary{% endif %}">
+                {{ fila.dias_abierto }}
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-muted">Sin tickets pendientes. ¡Al día!</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{{ chart_data|json_script:"chart-data" }}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+Chart.register(ChartDataLabels);
+
+const chartData = JSON.parse(document.getElementById('chart-data').textContent);
+const palette = ['#4C6EF5', '#F76707', '#2F9E44', '#E03131', '#7048E8', '#0CA678', '#F59F00', '#1971C2', '#C2255C', '#5C940D'];
+
+function pctLabels({ color = '#333', anchor = 'end', align = 'top', size = 11 } = {}) {
+  return {
+    color, anchor, align,
+    font: { weight: 'bold', size },
+    formatter: (value, ctx) => {
+      if (!value) return null;
+      const data = ctx.chart.data.datasets[ctx.datasetIndex].data;
+      const total = data.reduce((a, b) => a + b, 0);
+      const pct = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+      return `${value} (${pct}%)`;
+    },
+  };
+}
+
+new Chart(document.getElementById('chartPorTecnico'), {
+  type: 'bar',
+  data: { labels: chartData.por_tecnico.labels, datasets: [{ label: 'Resueltos', data: chartData.por_tecnico.data, backgroundColor: palette[0] }] },
+  options: { indexAxis: 'y', layout: { padding: { right: 40 } }, plugins: { legend: { display: false }, datalabels: pctLabels({ anchor: 'end', align: 'right' }) } }
+});
+
+new Chart(document.getElementById('chartPorDia'), {
+  type: 'bar',
+  data: { labels: chartData.por_dia.labels, datasets: [{ label: 'Resueltos', data: chartData.por_dia.data, backgroundColor: palette[2] }] },
+  options: { layout: { padding: { top: 20 } }, plugins: { legend: { display: false }, datalabels: pctLabels() } }
+});
+
+new Chart(document.getElementById('chartPrioridadResueltos'), {
+  type: 'doughnut',
+  data: { labels: chartData.por_prioridad_resueltos.labels, datasets: [{ data: chartData.por_prioridad_resueltos.data, backgroundColor: palette }] },
+  options: { plugins: { datalabels: pctLabels({ color: '#fff', anchor: 'center', align: 'center', size: 11 }) } }
+});
+
+new Chart(document.getElementById('chartEstadoPendientes'), {
+  type: 'doughnut',
+  data: { labels: chartData.por_estado_pendientes.labels, datasets: [{ data: chartData.por_estado_pendientes.data, backgroundColor: palette }] },
+  options: { plugins: { datalabels: pctLabels({ color: '#fff', anchor: 'center', align: 'center', size: 11 }) } }
+});
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>
+function exportarGraficosPDF() {
+  const mesTexto = document.querySelector('select[name="mes"] option:checked').textContent.trim();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  const usableWidth = pageWidth - margin * 2;
+
+  doc.setFontSize(16);
+  doc.text(`ITSM Abigail — Infraestructura (${mesTexto})`, margin, 15);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text(`Generado: ${new Date().toLocaleString('es-HN')}`, margin, 21);
+  doc.setTextColor(0);
+
+  let y = 30;
+  const graficos = [
+    { id: 'chartPorTecnico', titulo: 'Resueltos por técnico' },
+    { id: 'chartPorDia', titulo: 'Resueltos por día' },
+    { id: 'chartPrioridadResueltos', titulo: 'Resueltos por prioridad' },
+    { id: 'chartEstadoPendientes', titulo: 'Pendientes por estado' },
+  ];
+
+  graficos.forEach(({ id, titulo }) => {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    const imgData = canvas.toDataURL('image/png', 1.0);
+    const imgWidth = usableWidth;
+    const imgHeight = (canvas.height / canvas.width) * imgWidth;
+
+    if (y + imgHeight + 12 > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
+    }
+
+    doc.setFontSize(12);
+    doc.text(titulo, margin, y);
+    y += 5;
+    doc.addImage(imgData, 'PNG', margin, y, imgWidth, imgHeight);
+    y += imgHeight + 12;
+  });
+
+  const fecha = new Date().toISOString().slice(0, 10);
+  doc.save(`infraestructura-${mesTexto.replace(/\s+/g, '_')}-${fecha}.pdf`);
+}
+</script>
+{% endblock %}

@@ -7,7 +7,7 @@ from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from tickets.models import TeamArea, Ticket
-from tickets.services.history_parser import eventos_de_actividad
+from tickets.services.history_parser import eventos_de_actividad, tecnicos_colaboradores
 
 
 def resumen(tickets_qs):
@@ -323,3 +323,39 @@ def tickets_resueltos_por_dia(area_team_code, dias=7):
     )
     mapa = {row['dia']: row['total'] for row in conteo}
     return [{'fecha': f, 'total': mapa.get(f, 0)} for f in fechas]
+
+
+def infraestructura_resueltos(inicio, fin):
+    """Tickets que resolvió Infraestructura entre ``inicio`` y ``fin``
+    (excluyente), con el/los técnico(s) colaborador(es) derivados del
+    historial de cada uno. Para el reporte que pidió el equipo de INF."""
+    qs = (
+        Ticket.objects.filter(
+            resuelto_por_team_code='INF',
+            status=Ticket.STATUS_RESUELTO,
+            resuelto_por_fecha__gte=inicio,
+            resuelto_por_fecha__lt=fin,
+        )
+        .order_by('-resuelto_por_fecha')
+    )
+    filas = []
+    for t in qs:
+        colaboradores = tecnicos_colaboradores(t.history_raw, 'INF', t.resuelto_por_nombre)
+        filas.append({'ticket': t, 'colaboradores': colaboradores})
+    return filas
+
+
+def infraestructura_pendientes():
+    """Tickets de Infraestructura que todavía no están Resueltos, con
+    cuántos días llevan abiertos."""
+    qs = (
+        Ticket.objects.filter(team_code='INF')
+        .exclude(status=Ticket.STATUS_RESUELTO)
+        .order_by('created_at')
+    )
+    hoy = timezone.localdate()
+    filas = []
+    for t in qs:
+        dias_abierto = (hoy - t.created_at.date()).days if t.created_at else None
+        filas.append({'ticket': t, 'dias_abierto': dias_abierto})
+    return filas

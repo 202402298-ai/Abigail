@@ -139,14 +139,48 @@ def analizar_historial(history_raw):
     return resolver['team'], resolver['name'], segundos, resolver['ts']
 
 
+def tecnicos_colaboradores(history_raw, equipo, nombre_resolutor):
+    """HESK no tiene un campo de 'técnico colaborador'; se deriva del
+    historial: otros integrantes del mismo equipo que estuvieron asignados
+    al ticket en algún momento, además de quien finalmente lo resolvió."""
+    nombres = set()
+    for e in _parse_eventos(history_raw):
+        m = _ASIGNADO_RE.match(e['texto'])
+        if not m:
+            continue
+        target_team, target_name = _split_actor(m.group('target'))
+        if target_team == equipo and target_name and target_name != nombre_resolutor:
+            nombres.add(target_name)
+    return sorted(nombres)
+
+
 def eventos_de_actividad(history_raw):
     """Devuelve una lista de (fecha, team_code, nombre) — uno por cada
     evento del historial que tenga un actor identificable, sin importar el
     tipo de acción (asignación, cambio de categoría, de estado, cierre...).
     Para reportes de "actividad diaria": qué tickets tocó cada quien y
-    cuándo, independientemente de si eso resolvió el ticket o no."""
+    cuándo, independientemente de si eso resolvió el ticket o no.
+
+    Excepción: una asignación de un integrante de ITSM a OTRO integrante de
+    ITSM ("asignado a ITSM - Y por ITSM - X", con X != Y) no cuenta como
+    actividad de X — es una reasignación/enrutamiento interno, no evidencia
+    de que X esté trabajando el ticket ese día. La auto-asignación (X == Y,
+    alguien tomando el ticket para sí) sí cuenta."""
     resultado = []
     for e in _parse_eventos(history_raw):
+        m_asignado = _ASIGNADO_RE.match(e['texto'])
+        if m_asignado:
+            target_team, target_name = _split_actor(m_asignado.group('target'))
+            actor_team, actor_name = _split_actor(m_asignado.group('actor'))
+            if (
+                target_team == 'ITSM' and actor_team == 'ITSM'
+                and target_name and actor_name and target_name != actor_name
+            ):
+                continue
+            if actor_team and actor_name:
+                resultado.append((e['ts'].date(), actor_team, actor_name))
+            continue
+
         m = _EVENTO_CON_ACTOR_RE.match(e['texto'])
         if not m:
             continue

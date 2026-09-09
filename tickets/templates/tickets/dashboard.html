@@ -280,6 +280,13 @@
 
 {% else %}
 {# ==================== ÁREA ESPECÍFICA (equipos locales y de negocio, no ITSM) ==================== #}
+{% if area_activa == 'INF' %}
+<div class="mb-3">
+  <a href="{% url 'tickets:reporte_infraestructura' %}" class="btn btn-sm btn-outline-primary">
+    <i class="bi bi-file-earmark-bar-graph"></i> Ver reporte de resueltos y pendientes
+  </a>
+</div>
+{% endif %}
 <div class="card mb-4">
   <div class="card-header">
     Carga activa por técnico
@@ -402,18 +409,19 @@
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-sm mb-0">
-        <thead><tr><th>Ticket</th><th>Asunto</th><th>Área</th><th>Estado</th><th>Días abierto</th></tr></thead>
+        <thead><tr><th>Ticket</th><th>Asunto</th><th>Área</th><th>Técnico</th><th>Estado</th><th>Días abierto</th></tr></thead>
         <tbody>
           {% for item in detalle_tiempo_abierto %}
           <tr>
             <td>{{ item.ticket.tracking_id }}</td>
             <td>{{ item.ticket.subject|truncatechars:50 }}</td>
             <td>{{ area_names|get_item:item.ticket.team_code|default:item.ticket.team_code }}</td>
+            <td>{{ item.ticket.owner_name|default:"—" }}</td>
             <td>{{ item.ticket.status }}</td>
             <td>{{ item.dias_abierto }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="5" class="text-muted">Sin tickets activos.</td></tr>
+          <tr><td colspan="6" class="text-muted">Sin tickets activos.</td></tr>
           {% endfor %}
         </tbody>
       </table>

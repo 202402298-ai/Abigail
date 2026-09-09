@@ -1,5 +1,9 @@
+import datetime
+from collections import Counter
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -314,6 +318,180 @@ def seguimiento_detallado(request):
         'dias_minimos': DIAS_MINIMOS_SEGUIMIENTO,
     }
     return render(request, 'tickets/seguimiento_detallado.html', context)
+
+
+def _rango_mes(request):
+    """Lee ?mes=YYYY-MM de la query string (o el mes actual si no viene) y
+    devuelve (inicio, fin, anio, mes) — fin es excluyente."""
+    hoy = timezone.localdate()
+    mes_param = request.GET.get('mes')
+    try:
+        anio, mes = (int(p) for p in mes_param.split('-')) if mes_param else (hoy.year, hoy.month)
+    except ValueError:
+        anio, mes = hoy.year, hoy.month
+
+    inicio = timezone.make_aware(datetime.datetime(anio, mes, 1))
+    fin = timezone.make_aware(
+        datetime.datetime(anio + 1, 1, 1) if mes == 12 else datetime.datetime(anio, mes + 1, 1)
+    )
+    return inicio, fin, anio, mes
+
+
+def _requiere_acceso_inf(user):
+    areas_gestionadas = _areas_gestionadas(user)
+    if areas_gestionadas and not any(a.team_code == 'INF' for a in areas_gestionadas):
+        raise PermissionDenied
+
+
+@login_required
+def reporte_infraestructura(request):
+    """Reporte que pidió el equipo de Infraestructura: tickets resueltos en
+    un mes (con técnico responsable y colaboradores) + tickets pendientes
+    con su estado actual."""
+    _requiere_acceso_inf(request.user)
+
+    hoy = timezone.localdate()
+    inicio, fin, anio, mes = _rango_mes(request)
+
+    resueltos = metrics.infraestructura_resueltos(inicio, fin)
+    pendientes = metrics.infraestructura_pendientes()
+
+    opciones_mes = []
+    cursor = hoy.replace(day=1)
+    for _ in range(12):
+        opciones_mes.append(cursor)
+        cursor = (cursor - datetime.timedelta(days=1)).replace(day=1)
+
+    por_tecnico = Counter(f['ticket'].resuelto_por_nombre for f in resueltos)
+    por_prioridad_resueltos = Counter(f['ticket'].priority or '(sin prioridad)' for f in resueltos)
+    por_estado_pendientes = Counter(f['ticket'].status or '(sin estado)' for f in pendientes)
+
+    por_dia = Counter()
+    for f in resueltos:
+        if f['ticket'].resuelto_por_fecha:
+            por_dia[f['ticket'].resuelto_por_fecha.date()] += 1
+    ultimo_dia = min(fin.date(), hoy + datetime.timedelta(days=1))
+    dias_del_mes = []
+    cursor_dia = inicio.date()
+    while cursor_dia < ultimo_dia:
+        dias_del_mes.append(cursor_dia)
+        cursor_dia += datetime.timedelta(days=1)
+
+    tecnicos_ordenados = por_tecnico.most_common(10)
+
+    chart_data = {
+        'por_tecnico': {
+            'labels': [nombre for nombre, _ in tecnicos_ordenados],
+            'data': [total for _, total in tecnicos_ordenados],
+        },
+        'por_prioridad_resueltos': {
+            'labels': list(por_prioridad_resueltos.keys()),
+            'data': list(por_prioridad_resueltos.values()),
+        },
+        'por_estado_pendientes': {
+            'labels': list(por_estado_pendientes.keys()),
+            'data': list(por_estado_pendientes.values()),
+        },
+        'por_dia': {
+            'labels': [d.strftime('%d/%m') for d in dias_del_mes],
+            'data': [por_dia.get(d, 0) for d in dias_del_mes],
+        },
+    }
+
+    context = {
+        'resueltos': resueltos,
+        'pendientes': pendientes,
+        'mes_actual': f'{anio:04d}-{mes:02d}',
+        'opciones_mes': opciones_mes,
+        'chart_data': chart_data,
+    }
+    return render(request, 'tickets/reporte_infraestructura.html', context)
+
+
+def _hoja_excel(wb, nombre, encabezados, filas):
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    ws = wb.create_sheet(nombre)
+    ws.append(encabezados)
+    for col, _ in enumerate(encabezados, start=1):
+        celda = ws.cell(row=1, column=col)
+        celda.font = Font(bold=True, color='FFFFFF')
+        celda.fill = PatternFill('solid', fgColor='4C6EF5')
+        celda.alignment = Alignment(vertical='center')
+    ws.freeze_panes = 'A2'
+
+    for fila in filas:
+        ws.append(fila)
+
+    anchos = [max(len(str(encabezados[i])), *(len(str(f[i])) if f[i] is not None else 0 for f in filas)) if filas else len(str(encabezados[i])) for i in range(len(encabezados))]
+    for i, ancho in enumerate(anchos, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = min(max(ancho + 2, 10), 60)
+    return ws
+
+
+@login_required
+def reporte_infraestructura_excel(request):
+    """Descarga en Excel (.xlsx) las mismas dos tablas del reporte de
+    Infraestructura, en hojas separadas, listas para filtrar/ordenar."""
+    import openpyxl
+    from django.http import HttpResponse
+
+    _requiere_acceso_inf(request.user)
+
+    inicio, fin, anio, mes = _rango_mes(request)
+    resueltos = metrics.infraestructura_resueltos(inicio, fin)
+    pendientes = metrics.infraestructura_pendientes()
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    _hoja_excel(
+        wb, 'Resueltos',
+        ['ID de ticket', 'ID de seguimiento', 'Fecha de creación', 'Fecha de resolución',
+         'Técnico responsable', 'Técnico(s) colaborador(es)', 'Prioridad', 'Asunto', 'Descripción'],
+        [
+            [
+                f['ticket'].hesk_row_id,
+                f['ticket'].tracking_id,
+                timezone.localtime(f['ticket'].created_at).strftime('%Y-%m-%d %H:%M') if f['ticket'].created_at else '',
+                timezone.localtime(f['ticket'].resuelto_por_fecha).strftime('%Y-%m-%d %H:%M') if f['ticket'].resuelto_por_fecha else '',
+                f['ticket'].resuelto_por_nombre,
+                ', '.join(f['colaboradores']),
+                f['ticket'].priority,
+                f['ticket'].subject,
+                f['ticket'].message,
+            ]
+            for f in resueltos
+        ],
+    )
+
+    _hoja_excel(
+        wb, 'Pendientes',
+        ['ID de ticket', 'ID de seguimiento', 'Fecha de creación', 'Estado',
+         'Técnico asignado', 'Prioridad', 'Asunto', 'Días abierto'],
+        [
+            [
+                f['ticket'].hesk_row_id,
+                f['ticket'].tracking_id,
+                timezone.localtime(f['ticket'].created_at).strftime('%Y-%m-%d %H:%M') if f['ticket'].created_at else '',
+                f['ticket'].status,
+                f['ticket'].owner_name,
+                f['ticket'].priority,
+                f['ticket'].subject,
+                f['dias_abierto'],
+            ]
+            for f in pendientes
+        ],
+    )
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    nombre_archivo = f'infraestructura_{anio:04d}-{mes:02d}.xlsx'
+    response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
+    wb.save(response)
+    return response
 
 
 @login_required
